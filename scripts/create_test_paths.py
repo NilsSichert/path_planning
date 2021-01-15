@@ -1,61 +1,185 @@
 #!/usr/bin/env python
+import yaml
 import numpy as np
+import os
+import matplotlib.pyplot as plt
 
 
-def create_inf(dist_y=0.7, dist_x=0.9, r=0.5, dist_circle=1.2, N=100):
-    while not N % 4 == 0:
-        N = N + 1
-    waypoints_x = np.zeros(0)
-    waypoints_y = np.zeros(0)
-    p1_x = dist_x
-    p1_y = dist_y + r
-    p2_x = dist_x + dist_circle
-    p2_y = dist_y - r
-    p3_x = dist_x + dist_circle
-    p3_y = dist_y + r
-    p4_x = dist_x
-    p4_y = dist_y - r
-
-    x = np.linspace(0, np.pi, num=N / 4)
-    x_circle_r = dist_x - np.sin(x) * r
-    y_circle_r = dist_y - np.cos(x) * r
-
-    waypoints_x = np.append(waypoints_x, x_circle_r)
-    waypoints_y = np.append(waypoints_y, y_circle_r)
-    # at point 1
-    waypoints_x = np.append(waypoints_x, np.linspace(p1_x, p2_x, N / 4))
-    waypoints_y = np.append(waypoints_y, np.linspace(p1_y, p2_y, N / 4))
-    # at point 2
-    x_circle_l = dist_x + dist_circle + np.sin(x) * r
-    y_circle_l = dist_y - np.cos(x) * r
-    waypoints_x = np.append(waypoints_x, x_circle_l)
-    waypoints_y = np.append(waypoints_y, y_circle_l)
-    # at point 3
-    waypoints_x = np.append(waypoints_x, np.linspace(p3_x, p4_x, N / 4))
-    waypoints_y = np.append(waypoints_y, np.linspace(p3_y, p4_y, N / 4))
-    # at point 4
-    waypoints_x = np.asarray(waypoints_x)
-    waypoints_y = np.asarray(waypoints_y)
-    # print(waypoints_x.shape)
-    angle = np.zeros(N)
-    for i in range(N):
-        left_point = i - 1
-        right_point = i + 1
-        if i == 0:
-            left_point = N - 1
-            right_point = i + 1
-        if i == N - 1:
-            left_point = i - 1
-            right_point = 0
-        angle_trajectory = np.arctan2(
-            (-waypoints_y[left_point] + waypoints_y[right_point]),
-            (-waypoints_x[left_point] + waypoints_x[right_point]))
-        angle[i] = np.tan(angle_trajectory)
-        # print(angle_trajectory)
-
-    return (np.asarray([range(0, N), waypoints_x, waypoints_y, angle]))
+def lemniscate_of_bernoulli(t, a=1.0):
+    # https://de.wikipedia.org/wiki/Lemniskate_von_Bernoulli
+    # 0 <= t < 2*Pi
+    # start point for t=0: far right corner (x at positive max, y = 0)
+    # a: distance between origin/middle of 8 and "center" of circle
+    # approximately the same "height" of inf-sign
+    x = (a * np.sqrt(2) * np.cos(t)) / (np.sin(t)**2 + 1.0)
+    y = (a * np.sqrt(2) * np.cos(t) * np.sin(t)) / (np.sin(t)**2 + 1.0)
+    return x, y
 
 
+def lemniscate_of_gerono(t, a=1.0):
+    # https://mathworld.wolfram.com/EightCurve.html
+    # 0 <= t < 2*pi
+    # start point for t=0: origin, going towards top right corner
+    # (x and y positive)
+    # a: same a as for bernoulli -> same "height"
+    x = a * np.sin(t)
+    y = a * np.sin(t) * np.cos(t)
+    return x, y
 
-p = create_inf()
-print(np.transpose(p))
+
+def super_ellipse(t, a=1.0, b=3.0, n=4.0):
+    # https://en.wikipedia.org/wiki/Superellipse
+    # 0 <= t < 2*pi
+    x = np.abs(np.cos(t))**(2.0 / n) * a * np.sign(np.cos(t))
+    y = np.abs(np.sin(t))**(2.0 / n) * b * np.sign(np.sin(t))
+    return x, y
+
+
+def circle(t, r=1.0):
+    x = r * np.cos(t)
+    y = r * np.sin(t)
+    return x, y
+
+
+def get_yaw_angle(x, y):
+    # numerical computation of yaw angle using a line through the current and
+    # the next waypoint
+    # this works for any continous curve
+    yaw = [0] * len(x)
+    for i in range(len(x) - 1):
+        yaw[i] = np.arctan2(y[i + 1] - y[i], x[i + 1] - x[i])
+    # assuming that the next waypoint of the last waypoint is the first waypoint
+    yaw[-1] = np.arctan2(y[0] - y[-1], x[0] - x[-1])
+
+    return yaw
+
+
+def scale_and_move(x, y, x_offset=0.7, y_offset=2.0, factor=1.0):
+    # x is the shorter side of the tank, check this:
+    if np.max(np.abs(x)) > np.max(np.abs(y)):
+        # swap axes
+        tmp = x
+        x = y
+        y = tmp
+
+    x *= factor
+    y *= factor
+
+    x += x_offset
+    y += y_offset
+
+    return x, y
+
+
+def generate_waypoints(factor=1.0,
+                       x_offset=0.7,
+                       y_offset=2.0,
+                       depth=0.7,
+                       number=100):
+    # don't want duplicate of first point as last point -> endpoint=False
+    t = np.linspace(0, 2.0 * np.pi, num=number, endpoint=False)
+    x_raw, y_raw = lemniscate_of_bernoulli(t)
+    x, y = scale_and_move(x_raw,
+                          y_raw,
+                          x_offset=x_offset,
+                          y_offset=y_offset,
+                          factor=1.0)
+
+    yaw = get_yaw_angle(x, y)
+    data = {}
+    data["waypoints"] = []
+    for i in range(len(x)):
+        data["waypoints"].append({
+            "number": int(i),
+            "x": float(x[i]),
+            "y": float(y[i]),
+            "z": float(depth),
+            "yaw": float(yaw[i]),
+        })
+        print('Generated waypoint nr. ', i)
+
+    return data
+
+
+def test_and_plot(factor=1.0, x_offset=0.7, y_offset=2.0, number=100):
+    t = np.linspace(0, 2*np.pi, num=100, endpoint=False)
+
+    # 8 shape using Bernoulli
+    x, y = lemniscate_of_bernoulli(t)
+    x, y = scale_and_move(x, y, x_offset, y_offset, factor)
+    yaw = get_yaw_angle(x, y)
+
+    # 8 shape using Gerono
+    x_gerono, y_gerono = lemniscate_of_gerono(t)
+    x_gerono, y_gerono = scale_and_move(x_gerono, y_gerono, x_offset, y_offset,
+                                        factor)
+    # reverse to get same direction as Bernoulli lemniscate
+    # x_gerono = x_gerono[::-1]
+    # y_gerono = y_gerono[::-1]
+    yaw_gerono = get_yaw_angle(x_gerono, y_gerono)
+
+    # super ellipse
+    # TODO: here, the points aren't even close to equidistant!
+    n = 4.0
+    # length=2*a, width=2*b
+    a = 0.5
+    b = 1.0
+    x_ellipse, y_ellipse = super_ellipse(t, a, b, n)
+    x_ellipse, y_ellipse = scale_and_move(x_ellipse,
+                                          y_ellipse,
+                                          x_offset,
+                                          y_offset,
+                                          factor=1.0)
+    yaw_ellipse = get_yaw_angle(x_ellipse, y_ellipse)
+
+    # circle
+    x_circle, y_circle = circle(t)
+    x_circle, y_circle = scale_and_move(x_circle,
+                                        y_circle,
+                                        x_offset,
+                                        y_offset,
+                                        factor=0.5)
+    yaw_circle = get_yaw_angle(x_circle, y_circle)
+
+    fig1 = plt.figure()
+    ax = fig1.add_subplot(111)
+    plt.plot(x, y, ".", label='Bernoulli')
+    plt.plot(x_gerono, y_gerono, ".", label='Gerono')
+    plt.plot(x_circle, y_circle, ".", label='Circle')
+    plt.plot(x_ellipse, y_ellipse, ".", label='Super Ellipse')
+    plt.xlabel("x [m]")
+    plt.ylabel("y [m]")
+    plt.legend()
+    # plt.xlim([0.0, 2.0])
+    # plt.ylim([0.0, 4.0])
+    ax.set_aspect('equal', adjustable='box')
+
+    fig2 = plt.figure()
+    ax = fig2.add_subplot(111)
+    plt.plot(t, np.rad2deg(yaw), label='Bernoulli')
+    plt.plot(t, np.rad2deg(yaw_gerono), label='Gerono')
+    plt.plot(t, np.rad2deg(yaw_circle), label='Circle')
+    plt.plot(t, np.rad2deg(yaw_ellipse), label='Super Ellipse')
+    plt.xlabel("t")
+    plt.ylabel("yaw angle")
+    plt.title("Yaw angle over paramterization t")
+    plt.legend()
+    plt.show()
+
+
+def main():
+
+    factor = 0.9
+    # test factor
+    # test_and_plot(factor)
+
+    filename = "waypoints.yaml"
+    with open(filename, "w") as file_handle:
+        data = generate_waypoints(factor)  # always generating bernoulli curve!
+        yaml.dump(data, file_handle)
+        print("Created file '{}'".format(os.path.join(os.getcwd(), filename)))
+        print("Probably you want to move it to this package's config directory")
+
+
+if __name__ == "__main__":
+    main()

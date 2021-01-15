@@ -1,0 +1,9 @@
+<launch>
+  <node pkg="path_planning"
+        type="setpoint_node.py"
+        name="setpoint_node"
+        clear_params="true"
+        output="screen">
+        <rosparam command="load" file="$(find path_planning)/config/waypoints.yaml"/>
+  </node>
+</launch>
