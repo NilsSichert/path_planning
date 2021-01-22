@@ -1,7 +1,8 @@
 import numpy as np
+import tf.transformations
 
 
-def lemniscate_of_bernoulli(t, a=1.0):
+def lemniscate_of_bernoulli(t, bounding_box):
     """Generates a shape similiar to the number "8".
 
     See https://de.wikipedia.org/wiki/Lemniskate_von_Bernoulli for details of
@@ -9,23 +10,37 @@ def lemniscate_of_bernoulli(t, a=1.0):
 
     Args:
         t (float): Line parameter in range [0; 2*Pi]
-        a (float, optional): Size scaling factor. Approximately the width of an
-            "8". Defaults to 1.0.
+        bounding_box (tuple, list): Scale the path so it fits inside the
+            bounding box.
 
     Returns:
-        xy-Tuple
+        (x, y)
     """
+    ax = bounding_box[0] / np.sqrt(2) * 0.5
+    ay = bounding_box[1]
+    a = np.min([ax, ay])
     x = (a * np.sqrt(2) * np.cos(t)) / (np.sin(t)**2 + 1.0)
     y = (a * np.sqrt(2) * np.cos(t) * np.sin(t)) / (np.sin(t)**2 + 1.0)
     return x, y
 
 
-def lemniscate_of_gerono(t, a=1.0):
-    # https://mathworld.wolfram.com/EightCurve.html
-    # 0 <= t < 2*pi
-    # start point for t=0: origin, going towards top right corner
-    # (x and y positive)
-    # a: same a as for bernoulli -> same "height"
+def lemniscate_of_gerono(t, bounding_box):
+    """Creates an "8" shaped curve.
+
+    See https://mathworld.wolfram.com/EightCurve.html for details.
+
+    Args:
+        t (float, vector): Line parameter in range [0; 2pi]
+        bounding_box (tuple, list): The path is scaled so it fits inside the
+            bounding box.
+
+    Returns:
+        (x, y)
+    """
+    ax = bounding_box[0] * 0.5
+    ay = bounding_box[1]
+    a = np.min([ax, ay])
+
     x = a * np.sin(t)
     y = a * np.sin(t) * np.cos(t)
     return x, y
