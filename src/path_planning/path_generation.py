@@ -1,5 +1,6 @@
 import numpy as np
 import tf.transformations
+import copy
 
 
 def lemniscate_of_bernoulli(t, bounding_box):
@@ -88,3 +89,22 @@ def scale_and_move(x, y, x_offset=0.7, y_offset=2.0, factor=1.0):
     y += y_offset
 
     return x, y
+
+
+def xyz_to_dict_list(x, y, z):
+    path = []
+    for x_, y_, z_ in zip(x, y, z):
+        path.append(dict(x=float(x_), y=float(y_), z=float(z_)))
+    return path
+
+
+def xyz_to_gantry_yaml(x, y, z, loop=True, start_position=None):
+    path = xyz_to_dict_list(x, y, z)
+    if start_position is None:
+        start_position = copy.deepcopy(path[0])
+    else:
+        start_position = dict(x=float(start_position[0]),
+                              y=float(start_position[1]),
+                              z=float(start_position[2]))
+    data = dict(start_position=start_position, loop=bool(loop), path=path)
+    return data

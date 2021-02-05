@@ -13,7 +13,7 @@ def generate_waypoints(factor=1.0,
                        number=100):
     # don't want duplicate of first point as last point -> endpoint=False
     t = np.linspace(0, 2.0 * np.pi, num=number, endpoint=False)
-    x_raw, y_raw = pg.lemniscate_of_bernoulli(t)
+    x_raw, y_raw = pg.lemniscate_of_bernoulli(t, [1.5, 3.5])
     x, y = pg.scale_and_move(x_raw,
                              y_raw,
                              x_offset=x_offset,
